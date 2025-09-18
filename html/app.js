@@ -317,19 +317,35 @@ const InventoryContainer = Vue.createApp({
             if (!item) return;
             const slotElement = event.target.closest(".item-slot");
             if (!slotElement) return;
-            const ghostElement = this.createGhostElement(slotElement);
-            document.body.appendChild(ghostElement);
-            const offsetX = ghostElement.offsetWidth / 2;
-            const offsetY = ghostElement.offsetHeight / 2;
-            ghostElement.style.left = `${event.clientX - offsetX}px`;
-            ghostElement.style.top = `${event.clientY - offsetY}px`;
-            this.ghostElement = ghostElement;
-            this.currentlyDraggingItem = item;
-            this.currentlyDraggingSlot = slot;
-            this.dragStartX = event.clientX;
-            this.dragStartY = event.clientY;
-            this.dragStartInventoryType = inventoryType;
-            this.showContextMenu = false;
+            
+            try {
+                const ghostElement = this.createGhostElement(slotElement);
+                document.body.appendChild(ghostElement);
+                
+                // Wait for element to be rendered
+                setTimeout(() => {
+                    if (!ghostElement.offsetWidth || !ghostElement.offsetHeight) {
+                        this.clearDragData();
+                        return;
+                    }
+                    
+                    const offsetX = ghostElement.offsetWidth / 2;
+                    const offsetY = ghostElement.offsetHeight / 2;
+                    ghostElement.style.left = `${event.clientX - offsetX}px`;
+                    ghostElement.style.top = `${event.clientY - offsetY}px`;
+                    
+                    this.ghostElement = ghostElement;
+                    this.currentlyDraggingItem = item;
+                    this.currentlyDraggingSlot = slot;
+                    this.dragStartX = event.clientX;
+                    this.dragStartY = event.clientY;
+                    this.dragStartInventoryType = inventoryType;
+                    this.showContextMenu = false;
+                }, 0);
+            } catch (error) {
+                console.error('Start drag error:', error);
+                this.clearDragData();
+            }
         },
         createGhostElement(slotElement) {
             const ghostElement = slotElement.cloneNode(true);
@@ -346,13 +362,31 @@ const InventoryContainer = Vue.createApp({
             return ghostElement;
         },
         drag(event) {
-            if (!this.currentlyDraggingItem || !this.ghostElement) return;
-            requestAnimationFrame(() => {
-                const centeredX = event.clientX - this.ghostElement.offsetWidth / 2;
-                const centeredY = event.clientY - this.ghostElement.offsetHeight / 2;
-                this.ghostElement.style.left = `${centeredX}px`;
-                this.ghostElement.style.top = `${centeredY}px`;
-            });
+            if (!this.currentlyDraggingItem) return;
+            
+            if (!this.ghostElement) {
+                this.clearDragData();
+                return;
+            }
+            
+            try {
+                if (!this.ghostElement.offsetWidth || !this.ghostElement.offsetHeight) {
+                    this.clearDragData();
+                    return;
+                }
+                
+                requestAnimationFrame(() => {
+                    if (!this.ghostElement || !this.ghostElement.offsetWidth) return;
+                    
+                    const centeredX = event.clientX - this.ghostElement.offsetWidth / 2;
+                    const centeredY = event.clientY - this.ghostElement.offsetHeight / 2;
+                    this.ghostElement.style.left = `${centeredX}px`;
+                    this.ghostElement.style.top = `${centeredY}px`;
+                });
+            } catch (error) {
+                console.error('Drag error:', error);
+                this.clearDragData();
+            }
         },
         endDrag(event) {
             if (!this.currentlyDraggingItem) {
@@ -435,10 +469,14 @@ const InventoryContainer = Vue.createApp({
             this.clearDragData();
         },
         clearDragData() {
-            if (this.ghostElement) {
-                document.body.removeChild(this.ghostElement);
-                this.ghostElement = null;
+            if (this.ghostElement && document.body.contains(this.ghostElement)) {
+                try {
+                    document.body.removeChild(this.ghostElement);
+                } catch (error) {
+                    console.error('Error removing ghost element:', error);
+                }
             }
+            this.ghostElement = null;
             this.currentlyDraggingItem = null;
             this.currentlyDraggingSlot = null;
         },
